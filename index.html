@@ -1,0 +1,797 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Stone Slide</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; background: #0f1c2e; }
+  body { font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #f2f7fc; user-select: none; -webkit-user-select: none; }
+  canvas { display: block; width: 100vw; height: 100vh; height: 100dvh; touch-action: none; cursor: crosshair; }
+  [hidden] { display: none !important; }
+  .hud { position: fixed; pointer-events: none; text-shadow: 0 1px 3px #000a; }
+  #top { top: max(8px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); width: min(520px, calc(100vw - 16px)); }
+  #score { width: 100%; border-collapse: collapse; table-layout: fixed; background: #0b1626d9; border-radius: 10px; overflow: hidden; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; text-shadow: none; }
+  #score td { padding: 3px 4px; text-align: center; border-left: 1px solid #ffffff18; }
+  #score td.nm { text-align: left; width: 46%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 0; padding-left: 8px; }
+  #score td.tot { color: #ffd84d; font-size: 14px; }
+  #score td.st { width: 17%; letter-spacing: 1px; }
+  #score tr.now td.nm { color: #ffd84d; }
+  #score i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; border: 2px solid #9aa7b4; box-sizing: border-box; }
+  #score td.end.now { background: #ffffff18; }
+  #turn { top: calc(max(8px, env(safe-area-inset-top)) + 54px); left: 50%; transform: translateX(-50%); white-space: nowrap; text-align: center; font: 800 19px/1.15 system-ui, sans-serif; background: #0b1626c8; border-radius: 10px; padding: 3px 12px; }
+  #turn:empty { display: none; }
+  #turn small { display: block; font-size: 12px; font-weight: 700; opacity: .85; }
+  #turn.mine { color: #ffd84d; }
+  #msg { top: 42%; left: 0; right: 0; text-align: center; font: 900 40px/1.1 system-ui, sans-serif; color: #fff; -webkit-text-stroke: 1.5px #0b1626; padding: 0 16px; opacity: 0; transform: translateY(-50%) scale(.85); transition: opacity .25s, transform .25s; }
+  #msg.on { opacity: 1; transform: translateY(-50%) scale(1); }
+  #msg small { display: block; font-size: 17px; -webkit-text-stroke: 0; margin-top: 6px; }
+  #sweep { bottom: calc(max(10px, env(safe-area-inset-bottom)) + 74px); left: 0; right: 0; text-align: center; font: 900 30px system-ui, sans-serif; color: #7fe7ff; letter-spacing: 2px; -webkit-text-stroke: 1.5px #0b1626; text-shadow: 0 2px 8px #0b1626; }
+  #sweep.on { color: #fff; animation: pulse .25s infinite alternate; }
+  @keyframes pulse { to { transform: scale(1.08); } }
+  #bar { bottom: calc(max(8px, env(safe-area-inset-bottom)) + 18px); left: max(10px, env(safe-area-inset-left)); right: max(10px, env(safe-area-inset-right)); display: flex; align-items: center; gap: 10px; min-height: 44px; }
+  #hint { flex: 1; text-align: center; font-size: 14px; line-height: 1.25; }
+  #hint:not(:empty) { background: #0b1626c8; border-radius: 10px; padding: 5px 10px; }
+  #curl { pointer-events: auto; min-height: 44px; min-width: 104px; padding: 0 14px; border-radius: 22px; border: 1px solid #ffffff40; background: #0b1626cc; color: #fff; font: 800 14px system-ui, sans-serif; cursor: pointer; touch-action: none; white-space: nowrap; }
+  #net { bottom: max(6px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); white-space: nowrap; text-align: center; font-size: 12px; background: #0b1626b0; border-radius: 8px; padding: 1px 8px; }
+  #net:empty { display: none; }
+  #over { position: fixed; inset: 0; display: grid; place-items: center; background: #08101cb0; }
+  .card { box-sizing: border-box; width: min(380px, calc(100vw - 32px)); max-height: 86vh; overflow: auto; padding: 20px; border-radius: 16px; background: #15263d; border: 1px solid #ffffff2a; text-align: center; }
+  .card h2 { margin: 0 0 4px; font-size: 26px; color: #ffd84d; }
+  .card h3 { margin: 14px 0 4px; font-size: 13px; color: #7fe7ff; text-align: left; }
+  .card ol { margin: 0; padding-left: 24px; font-size: 14px; text-align: left; }
+  .card li span { float: right; font-variant-numeric: tabular-nums; }
+  .card p { margin: 8px 0 0; font-size: 13px; opacity: .8; }
+  button.go { width: 100%; min-height: 48px; margin-top: 14px; border: 0; border-radius: 12px; background: #ffd84d; color: #3a2a00; font: 800 17px system-ui, sans-serif; cursor: pointer; }
+  @media (max-width: 600px) { #hint { font-size: 13px; } #msg { font-size: 30px; } }
+</style>
+<script src="https://cdn.multiplayeragent.com/sdk/mp.global.js"></script>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div class="hud" id="top"><table id="score"></table></div>
+<div class="hud" id="turn"></div>
+<div class="hud" id="msg"></div>
+<div class="hud" id="sweep"></div>
+<div class="hud" id="bar"><div id="hint"></div><button id="curl" hidden>Curl ↻ right</button></div>
+<div class="hud" id="net">Connecting…</div>
+<div id="over" hidden><div class="card">
+  <h2 id="overTitle"></h2><div id="overSub"></div>
+  <h3>Most wins</h3><ol id="board"><li>Loading…</li></ol>
+  <button class="go" id="again">Play again</button><p id="next"></p>
+</div></div>
+<script>
+/* ═══ STONE SLIDE · a Multiplayer Agent starter ═════════════════════════════════════════
+ * Two teams slide stones down a long sheet of ice at the target. After a stone leaves the
+ * hand, its team SWEEPS in front of it so it glides further and curls less. Four stones per
+ * team per end, three ends; the stones closest to the button score. Versus, 2–8 players;
+ * bots fill both teams.
+ *
+ * WHERE THINGS ARE (search for the "── " headers):
+ *   CONFIG ........ teams, ends, timings, the sheet, stone physics, sweeping, the bots
+ *   CONNECTION .... MP_CONNECT, joining, the offline room, who is host
+ *   ICE ........... the sheet's lines and the house; one physics step for every stone (friction,
+ *                   curl, sweeping, stones hitting stones, out of play); scoring an end
+ *   MATCH (HOST) .. seats and teams, whose throw, starting a throw, running the sliding stones,
+ *                   counting an end. Only the host writes the shared fields.
+ *   BOTS .......... how a bot picks a draw, a guard or a takeout, and when bots sweep
+ *   MY TURN ....... aiming, weight, curl, throwing; holding to sweep
+ *   DRAW .......... the camera that follows the stone, the ice, the house, stones, brooms
+ *   HUD & RESULTS . scoreboard, whose throw, call-outs, results card, leaderboard
+ *   INPUT ......... drag back to throw, hold to sweep, keys, the curl button
+ *
+ * HOW THE MULTIPLAYER WORKS (a relay room: no server code, the HOST's browser runs the ice):
+ *   - The match is ONE shared field, `game`: {id, v, phase: aim|slide|end|over, seats, end,
+ *     thr, first, n, score, ends, turnAt, endsAt, res, win}. `seats` = every player and bot
+ *     {id, n, c, t (team), bot}. Only the HOST writes it, and `v` goes up on every write.
+ *   - The stones are the shared field `stones`: [{i, t, x, y, vx, vy, c}] (id, team, position,
+ *     speed, curl). While stones move, the HOST simulates them and writes them ~12 times a
+ *     second; everyone else runs the same physics between writes and eases into each write.
+ *   - Who is sweeping right now is the shared field `sweep` {n, who: [seat numbers]}.
+ *   - On your throw you aim on your own screen and write your OWN entity `aim` {n, a, w, c}
+ *     (throw number, angle, weight, curl), so everyone sees your line. You also write `hb`
+ *     (heartbeat), `n` and `c` (name, color).
+ *   - Intents to the host: "throw" {g, n, a, w, c} (it checks it is your throw), "sweep" {n}
+ *     about 5 times a second while you hold (only your team's stone), "again" (Play again).
+ *   - Bots aim and sweep on the host; a bot's aim is in the shared field `bot` {n, a, w, c}.
+ *   - A new host carries on from `game`, `stones` and `sweep`: the stone keeps sliding.
+ *   - ?attract plays offline, bots only (the preview video is recorded from it).
+ *   - Leaderboard "wins": +1 for every match your team wins, shown on the results card.
+ */
+
+// ── CONFIG ──────────────────────────────────────────────────────────────────────────
+const CONFIG = {
+  teamSize: 2,          // bots fill each team up to this many players ...
+  maxSeats: 8,          // ... and up to 8 people play, 4 a side
+  stonesPerTeam: 4,     // stones each team throws in an end
+  ends: 3,              // ends in a match
+  turnMs: 30000,        // a player who doesn't throw in this long gets a throw made for them
+  endMs: 4500,          // ms the end's score shows before the next end
+  resultsMs: 15000,     // results show this long, then a new match (Play again starts it at once)
+  seatGraceMs: 10000,   // a seated player silent this long hands the seat to a bot
+  simSpeed: 1,          // how fast the ice runs (1 = normal; the preview runs it faster)
+  // The sheet, in metres. x runs across (-2.2..2.2); y runs from the release (0) to the far end.
+  halfWidth: 2.2,
+  hogY: 21.5,           // a stone must get past this line, or it is taken off
+  teeY: 27.9,           // the middle of the house (the button)
+  backY: 29.73,         // a stone fully past this line is out
+  endY: 31.5,           // the boards at the far end
+  houseR: 1.83,         // the outer ring; a stone touching it can score
+  stoneR: 0.19,         // a little bigger than real stones, so they read on a phone
+  // Stone physics
+  friction: 1.12,       // m/s² the ice slows a stone by
+  curl: 0.045,          // how hard a stone curls; it curls more as it slows (about a metre on a draw)
+  curlSoft: 1.0,        // m/s: below about this speed the curl gets strong
+  bounce: 0.88,         // stone-on-stone: how much speed a hit keeps
+  sweepFriction: 0.12,  // sweeping cuts the friction by this share (the stone goes further) ...
+  sweepCurl: 0.55,      // ... and the curl by this share (it runs straighter)
+  // Throwing
+  aimMax: 0.08,         // the widest angle off straight, radians
+  aimScale: 0.2,        // stone angle per radian of your drag angle (lower = finer aim)
+  minW: 6.6, maxW: 11.5, // m/s for the shortest and the hardest throw
+  drawW: 8.6,           // the first 70% of your pull covers minW..drawW (guards and draws), the rest is for takeouts
+  maxPull: 180,         // screen px you drag back for the hardest throw
+  // Bots
+  botThinkMs: 2200,     // a bot lines up this long before it throws
+  botWeightErr: 0.025,  // how far off a bot's weight can be (share of the speed)
+  botAimErr: 0.004,     // ... and its angle (radians)
+  botLight: 0.04,       // bots throw draws this much light and sweep them in
+  botNames: ["Brooms", "Pebble", "Hammer Hal", "Button Bea", "Hog Line Hank", "Ice Iris", "Slider Sam", "Tee Tina"],
+  board: "wins",        // leaderboard name
+};
+const COLORS = ["#ff6b6b", "#4dabf7", "#69db7c", "#da77f2", "#ff922b", "#f783ac", "#3bc9db", "#a9e34b"];
+const TEAMS = [{ name: "Red", c: "#e8313b", dark: "#8f1219" }, { name: "Yellow", c: "#ffcc1a", dark: "#a07800" }];
+
+// ── CONNECTION ──────────────────────────────────────────────────────────────────────
+// The builder fills these in for this game. Downloaded from GitHub? Put your own pk_ key here.
+const MP_CONNECT = {
+  key: 'pk_REPLACE_ME',
+  room: 'stone-slide',
+  endpoint: 'wss://live.multiplayeragent.com',
+  apiUrl: 'https://api.multiplayeragent.com',
+};
+const ATTRACT = new URLSearchParams(location.search).has("attract");
+
+/** Same shape as the SDK client, kept in this tab: offline play and ?attract. */
+function localRoom() {
+  const id = "local", state = { entities: { players: { [id]: {} } }, shared: {} }, subs = [];
+  let queued = false;
+  const emit = () => { if (!queued) { queued = true; queueMicrotask(() => { queued = false; subs.forEach((f) => f(state)); }); } };
+  const put = (o, k, v) => { if (typeof k === "object") Object.assign(o, k); else o[k] = v; emit(); };
+  return {
+    sessionId: id, state, offline: true,
+    me: { set: (k, v) => put(state.entities.players[id], k, v) },
+    setShared: (k, v) => put(state.shared, k, v),
+    onState: (f) => { subs.push(f); f(state); }, onJoin() {}, onLeave() {}, on() {}, send() {},
+    onDisconnect() {}, onReconnect() {}, leave: async () => {},
+  };
+}
+async function connect() {
+  if (ATTRACT || typeof MP === "undefined") return localRoom();
+  try {
+    const mp = await Promise.race([MP.join({ ...MP_CONNECT }), new Promise((_, no) => setTimeout(() => no(new Error("timed out")), 10000))]);
+    window.mp = mp; // the builder calls window.mp.leave() when the page closes
+    return mp;
+  } catch (e) {
+    console.warn("Playing offline:", e && e.message);
+    return localRoom();
+  }
+}
+const parse = (v, fb) => { if (typeof v !== "string") return fb; try { return JSON.parse(v); } catch { return fb; } };
+const parsed = new Map();
+/** A JSON value from state, parsed once per change (read-only: never mutate what this returns). */
+function parseOnce(key, raw, fallback) {
+  const c = parsed.get(key);
+  if (c && c.raw === raw) return c.v;
+  const v = parse(raw, fallback); parsed.set(key, { raw, v }); return v;
+}
+let net = null, S = { entities: { players: {} }, shared: {} };
+const seenHb = new Map();
+/** Players whose heartbeat moved in the last 3s (plus us), sorted by sessionId. */
+function livePlayers() {
+  const now = performance.now(), out = [];
+  for (const [id, p] of Object.entries(S.entities.players || {})) {
+    const s = seenHb.get(id);
+    if (!s || s.hb !== p.hb) seenHb.set(id, { hb: p.hb, at: now });
+    if (id === net.sessionId || now - seenHb.get(id).at < 3000) out.push(id);
+  }
+  return out.sort();
+}
+let frameAt = 0, wokeAt = -1e9; // my loop's last frame, and when it last woke from a stall (a frozen or background tab)
+/** Never while my own loop is stalled, nor for 0.7s after it wakes: the room moved on without me, so the newer state lands first. */
+const isHost = () => livePlayers()[0] === net.sessionId && performance.now() - frameAt < 1000 && performance.now() - wokeAt > 700;
+/** Still in the room and heard from within the seat grace time (a backgrounded phone keeps its seat). */
+const stillHere = (id) => id === net.sessionId || (!!S.entities.players[id] && performance.now() - (seenHb.get(id)?.at ?? -1e9) < CONFIG.seatGraceMs);
+
+// ── ICE ─────────────────────────────────────────────────────────────────────────────
+const SR = CONFIG.stoneR, HW = CONFIG.halfWidth, TEE = CONFIG.teeY;
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const r3 = (v) => Math.round(v * 1000) / 1000;
+const ICE_STEP = 1 / 120;
+const distToTee = (s) => Math.hypot(s.x, s.y - TEE);
+const inHouse = (s) => distToTee(s) - SR <= CONFIG.houseR;
+const moving = (s) => s.vx !== 0 || s.vy !== 0;
+/** One physics step for every stone. The stone `sweptId` glides further and curls less while `swept`. */
+function iceStep(stones, dt, sweptId, swept) {
+  const C = CONFIG;
+  for (const s of stones) {
+    if (!moving(s)) continue;
+    const sw = swept && s.i === sweptId;
+    let v = Math.hypot(s.vx, s.vy);
+    // the curl: a push to one side, stronger as the stone slows (c = +1 curls right, -1 left)
+    const lat = s.c * C.curl * (sw ? 1 - C.sweepCurl : 1) / (v + C.curlSoft) * 9.81 * dt;
+    const ux = s.vx / v, uy = s.vy / v;
+    s.vx += uy * lat; s.vy -= ux * lat; // sideways: to the right of where it is going for c = +1
+    v = Math.hypot(s.vx, s.vy);
+    const nv = v - C.friction * (sw ? 1 - C.sweepFriction : 1) * dt;
+    if (nv <= 0.02) { s.vx = 0; s.vy = 0; continue; }
+    s.vx *= nv / v; s.vy *= nv / v;
+    s.x += s.vx * dt; s.y += s.vy * dt;
+    if (Math.abs(s.x) > HW - SR) { s.x = Math.sign(s.x) * (HW - SR); s.vx = 0; s.vy *= 0.3; s.out = 1; } // touched the side: out
+    if (s.y > C.endY - SR) { s.y = C.endY - SR; s.vx = s.vy = 0; s.out = 1; }                          // into the far boards
+    if (s.y - SR > C.backY) s.out = 1;                                                                // past the back line
+  }
+  for (let pass = 0; pass < 3; pass++) for (let i = 0; i < stones.length; i++) for (let k = i + 1; k < stones.length; k++) {
+    const a = stones[i], b = stones[k];
+    if (!moving(a) && !moving(b)) continue;
+    const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
+    if (d >= 2 * SR || d < 1e-6) continue;
+    const nx = dx / d, ny = dy / d, push = (2 * SR - d) / 2;
+    a.x -= nx * push; a.y -= ny * push; b.x += nx * push; b.y += ny * push;
+    const closing = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny;
+    if (closing <= 0) continue;
+    const j = ((1 + C.bounce) / 2) * closing;
+    a.vx -= j * nx; a.vy -= j * ny; b.vx += j * nx; b.vy += j * ny;
+    if (closing > 0.6) hitFx((a.x + b.x) / 2, (a.y + b.y) / 2, closing);
+  }
+}
+/** Where one stone thrown at angle a, weight w, curl c ends up on an empty sheet (or its x when it reaches y = untilY). */
+function slideAlone(a, w, c, untilY = Infinity, sweep = 0) {
+  const s = { i: 0, x: 0, y: 0, vx: Math.sin(a) * w, vy: Math.cos(a) * w, c }, list = [s];
+  for (let t = 0; t < 20 && moving(s) && s.y < untilY; t += 1 / 60) iceStep(list, 1 / 60, 0, sweep);
+  return s;
+}
+/** The end's score: the team with the stone nearest the button scores one for each of its stones nearer than the other team's best. */
+function endScore(stones) {
+  const inH = stones.filter((s) => !s.out && inHouse(s)).sort((a, b) => distToTee(a) - distToTee(b));
+  if (!inH.length) return { team: -1, pts: 0, ids: [] };
+  const team = inH[0].t, k = inH.findIndex((s) => s.t !== team), ids = (k < 0 ? inH : inH.slice(0, k)).map((s) => s.i);
+  return { team, pts: ids.length, ids };
+}
+
+// ── MATCH (HOST) ────────────────────────────────────────────────────────────────────
+const host = { acting: false, last: null, ice: [], acc: 0, lastPub: 0, stillAt: 0, sweepAt: new Map(), sweepKey: "", bot: null, plan: null, predictAt: 0, botSweep: false, again: false };
+/** The match as state has it, or the host's own newer write that hasn't come back yet. `v` only goes up. */
+function game() {
+  const g = parseOnce("game", S.shared.game, null);
+  return host.last && isHost() && (!g || host.last.v > g.v) ? host.last : g;
+}
+function writeGame(g) { g = { ...g, v: (game()?.v ?? 0) + 1 }; host.last = g; net.setShared("game", JSON.stringify(g)); return g; }
+const packStone = (s) => ({ i: s.i, t: s.t, x: r3(s.x), y: r3(s.y), vx: r3(s.vx), vy: r3(s.vy), c: s.c, ...(s.out ? { out: 1 } : {}) });
+function writeStones() { host.lastPub = performance.now(); net.setShared("stones", JSON.stringify(host.ice.map(packStone))); }
+/** Become host: carry on with the stones (still sliding, if they were). My own run of the stones since the last
+ *  write is newer than that write (the old host may have frozen seconds ago), so keep it when it started from it. */
+function adopt() {
+  host.acting = true; host.last = null; host.bot = null; host.acc = 0; host.stillAt = 0;
+  const fresh = viewRaw === S.shared.stones && view.length;
+  host.ice = (fresh ? view : parse(S.shared.stones, []) || []).map((s) => ({ ...s }));
+}
+const humansHere = () => livePlayers().filter((id) => !(ATTRACT && id === net.sessionId) && (id === net.sessionId || S.entities.players[id]?.n));
+const rid = () => "b" + Math.random().toString(36).slice(2, 6);
+const teamSeats = (g, t) => g.seats.map((s, i) => (s.t === t ? i : -1)).filter((i) => i >= 0);
+/** A bot for team t with a name and color nobody is using. */
+function botSeat(t, seats) {
+  const names = new Set(seats.map((s) => s.n)), cols = new Set(seats.map((s) => (s.bot ? s.c : colorOf(s.id))));
+  return { id: rid(), bot: 1, t, n: CONFIG.botNames.find((n) => !names.has(n)) || "Bot", c: COLORS.find((c) => !cols.has(c)) || "#ccc" };
+}
+/** The team throwing now (they alternate stones) and the seat whose throw it is (a team's players take turns). */
+const throwTeam = (g) => (g.thr % 2 === 0 ? g.first : 1 - g.first);
+function thrower(g) { const list = teamSeats(g, throwTeam(g)), k = Math.floor(g.thr / 2); return list[Math.floor((k * list.length) / CONFIG.stonesPerTeam)]; }
+function newMatch(id) {
+  const seats = [];
+  humansHere().slice(0, CONFIG.maxSeats).forEach((pid, k) => seats.push({ id: pid, bot: 0, t: k % 2, n: nameOf(pid).slice(0, 16) }));
+  for (const t of [0, 1]) while (seats.filter((s) => s.t === t).length < CONFIG.teamSize) seats.push(botSeat(t, seats));
+  seats.sort((a, b) => a.t - b.t);
+  host.ice = []; writeStones(); host.bot = null;
+  return writeGame({ id, phase: "aim", seats, end: 1, thr: 0, first: 0, n: 0, score: [0, 0], ends: [], turnAt: Date.now(), endsAt: 0, res: null, win: -1 });
+}
+/** Gone players hand their seat to a bot; someone waiting takes a bot's seat, or a new seat. */
+function fixSeats(g) {
+  if (ATTRACT || g.phase === "over") return g;
+  let seats = g.seats, changed = false, turnAt = g.turnAt;
+  seats = seats.map((s) => { if (s.bot || stillHere(s.id)) return s; changed = true; return botSeat(s.t, seats); });
+  for (const id of humansHere().filter((h) => !seats.some((s) => s.id === h))) {
+    const people = (t) => seats.filter((s) => s.t === t && !s.bot).length, pref = people(0) <= people(1) ? 0 : 1;
+    let j = seats.findIndex((s) => s.bot && s.t === pref); if (j < 0) j = seats.findIndex((s) => s.bot);
+    if (j >= 0) { seats = seats.map((s, k) => (k === j ? { id, bot: 0, t: s.t, n: nameOf(id).slice(0, 16) } : s)); if (g.phase === "aim" && j === thrower(g)) { turnAt = Date.now(); host.bot = null; } }
+    else if (seats.length < CONFIG.maxSeats) { const t = seats.filter((s) => s.t === 0).length <= seats.filter((s) => s.t === 1).length ? 0 : 1; seats = [...seats, { id, bot: 0, t, n: nameOf(id).slice(0, 16) }]; }
+    else break;
+    changed = true;
+  }
+  return changed ? writeGame({ ...g, seats, turnAt }) : g;
+}
+/** Check a throw and start it: the stone leaves the hack sliding. */
+function startThrow(g, m) {
+  const a = r3(clamp(+m.a || 0, -CONFIG.aimMax, CONFIG.aimMax)), w = r3(clamp(+m.w || 0, CONFIG.minW, CONFIG.maxW)), c = +m.c < 0 ? -1 : 1;
+  host.ice = host.ice.filter((s) => !s.out);
+  host.ice.push({ i: g.n, t: throwTeam(g), x: 0, y: 0, vx: Math.sin(a) * w, vy: Math.cos(a) * w, c });
+  host.acc = 0; host.stillAt = 0; host.sweepAt.clear(); host.bot = null;
+  writeStones();
+  return writeGame({ ...g, phase: "slide", turnAt: Date.now() });
+}
+/** Everything has stopped: take off what is out (and a stone short of the hog line), then the next throw or the end's score. */
+function finishThrow(g) {
+  host.ice = host.ice.filter((s) => !s.out && !(s.i === g.n && s.y < CONFIG.hogY));
+  writeStones(); net.setShared("sweep", JSON.stringify({ n: g.n, who: [] })); host.sweepKey = "";
+  const thr = g.thr + 1;
+  if (thr < 2 * CONFIG.stonesPerTeam) return writeGame({ ...g, phase: "aim", thr, n: g.n + 1, turnAt: Date.now() });
+  const r = endScore(host.ice), score = [...g.score], row = [0, 0];
+  if (r.team >= 0) { score[r.team] += r.pts; row[r.team] = r.pts; }
+  return writeGame({ ...g, phase: "end", thr, score, ends: [...g.ends, row], res: { end: g.end, ...r }, endsAt: Date.now() + CONFIG.endMs });
+}
+/** The end's score has shown: the next end (the team that scored throws first; the other has the last stone), or the match is over. */
+function nextEnd(g) {
+  if (g.end >= CONFIG.ends) return writeGame({ ...g, phase: "over", win: g.score[0] === g.score[1] ? -1 : g.score[0] > g.score[1] ? 0 : 1, endsAt: Date.now() + CONFIG.resultsMs });
+  host.ice = []; writeStones();
+  const first = g.res && g.res.team >= 0 ? g.res.team : g.first;
+  return writeGame({ ...g, phase: "aim", end: g.end + 1, thr: 0, first, n: g.n + 1, turnAt: Date.now(), res: null });
+}
+/** Run the sliding stones for dt seconds, publish them, and finish the throw once all have stopped. */
+function runIce(g, dt, now) {
+  const team = throwTeam(g), sweepers = sweepingSeats(g, team, now);
+  const key = JSON.stringify(sweepers);
+  if (key !== host.sweepKey) { host.sweepKey = key; net.setShared("sweep", JSON.stringify({ n: g.n, who: sweepers })); }
+  host.acc += dt * CONFIG.simSpeed;
+  while (host.acc >= ICE_STEP) { host.acc -= ICE_STEP; iceStep(host.ice, ICE_STEP, g.n, sweepers.length > 0); }
+  const anyMoving = host.ice.some(moving);
+  if (anyMoving && now - host.lastPub > 80) writeStones();
+  if (anyMoving) { host.stillAt = 0; return; }
+  if (!host.stillAt) { host.stillAt = now; writeStones(); }
+  if (now - host.stillAt > 500) finishThrow(g);
+}
+/** The seats of the throwing team sweeping right now: people who sent "sweep" lately, and bots that decide to. */
+function sweepingSeats(g, team, now) {
+  const stone = host.ice.find((s) => s.i === g.n);
+  if (!stone || !moving(stone)) return [];
+  if (now - host.predictAt > 150) { host.predictAt = now; host.botSweep = botWantsSweep(g, stone); }
+  return teamSeats(g, team).filter((k) => {
+    const s = g.seats[k];
+    if (s.bot) return host.botSweep;
+    const at = s.id === me.id ? (sweepHeld() ? now : 0) : host.sweepAt.get(s.id) || 0;
+    return now - at < 350;
+  });
+}
+function hostTick(dt, now) {
+  if (!host.acting) adopt();
+  let g = game();
+  const t = Date.now();
+  if (!g) g = newMatch(1);
+  g = fixSeats(g);
+  if (g.phase === "over") { if (t > g.endsAt || host.again) newMatch(g.id + 1); host.again = false; return; }
+  host.again = false;
+  if (g.phase === "end") { if (t > g.endsAt) nextEnd(g); return; }
+  if (g.phase === "slide") { runIce(g, dt, now); return; }
+  const k = thrower(g), seat = g.seats[k];
+  if (seat && (seat.bot || t > g.turnAt + CONFIG.turnMs)) botTurn(g, now, !seat.bot);
+}
+/** A "throw" intent (or my own throw as host): only from the player whose throw it is, for this exact throw. */
+function hostThrow(from, m) {
+  const g = game();
+  if (!g || g.phase !== "aim" || !m || m.g !== g.id || +m.n !== g.n || g.seats[thrower(g)]?.id !== from) return;
+  startThrow(g, m);
+}
+
+// ── BOTS ────────────────────────────────────────────────────────────────────────────
+const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) / 0.5;
+/** A bot's throw: plan it, swing its line over, throw. */
+function botTurn(g, now, forPlayer) {
+  if (!host.bot || host.bot.n !== g.n) host.bot = { n: g.n, plan: botPlan(g), start: now, think: forPlayer ? 600 : CONFIG.botThinkMs, lastPub: 0 };
+  const b = host.bot, k = clamp((now - b.start) / (b.think * 0.7), 0, 1), e = k * k * (3 - 2 * k);
+  const a = b.plan.a * e + Math.sin(now / 300) * 0.01 * (1 - e), w = CONFIG.minW + (b.plan.w - CONFIG.minW) * e;
+  if (now - b.lastPub > 100) { b.lastPub = now; net.setShared("bot", JSON.stringify({ n: g.n, a: r3(a), w: r3(w), c: b.plan.c })); }
+  if (now - b.start > b.think) { host.plan = { n: g.n, ...b.plan }; startThrow(g, b.plan); }
+}
+/** Pick a shot: take out the other team's best stone, put up a guard, or draw to the button. Then miss a little. */
+function botPlan(g) {
+  const team = throwTeam(g), stones = host.ice.filter((s) => !s.out), c = Math.random() < 0.5 ? 1 : -1;
+  const best = stones.filter(inHouse).sort((a, b) => distToTee(a) - distToTee(b))[0];
+  let mode = "draw", tx = (Math.random() - 0.5) * 0.7, ty = TEE + (Math.random() - 0.5) * 0.9;
+  if (best && best.t !== team && Math.random() < 0.65) mode = "takeout";
+  else if (best && best.t === team && g.thr < 6 && Math.random() < 0.5) { mode = "guard"; tx = best.x * 0.8; ty = TEE - CONFIG.houseR - 1.2 - Math.random(); }
+  let a = 0, w = 0;
+  if (mode === "takeout") { // hard, straight at the stone
+    w = 10.2 + Math.random() * 0.8;
+    a = bisect(-CONFIG.aimMax, CONFIG.aimMax, (x) => slideAlone(x, w, c, best.y).x - best.x);
+  } else {
+    for (let k = 0; k < 2; k++) { // weight for the distance, then the angle for the curl (twice, they affect each other)
+      w = bisect(CONFIG.minW, CONFIG.maxW, (x) => slideAlone(a, x, c).y - ty);
+      a = bisect(-CONFIG.aimMax, CONFIG.aimMax, (x) => slideAlone(x, w, c).x - tx);
+    }
+    w *= 1 - CONFIG.botLight; // light on purpose: the sweepers bring it in
+  }
+  return { mode, ty, c, a: clamp(a + gauss() * CONFIG.botAimErr, -CONFIG.aimMax, CONFIG.aimMax), w: clamp(w * (1 + gauss() * CONFIG.botWeightErr), CONFIG.minW, CONFIG.maxW) };
+}
+/** The x in [lo, hi] where f(x) crosses zero (f goes up with x). */
+function bisect(lo, hi, f) { for (let k = 0; k < 18; k++) { const mid = (lo + hi) / 2; if (f(mid) < 0) lo = mid; else hi = mid; } return (lo + hi) / 2; }
+/** Bots sweep their own team's stone while it would stop short: of the bot's target, or of the house for a person's throw. */
+function botWantsSweep(g, stone) {
+  const plan = host.plan && host.plan.n === g.n ? host.plan : null;
+  if (plan && plan.mode === "takeout") return false;
+  const ghost = { ...stone }, list = [ghost];
+  for (let t = 0; t < 15 && moving(ghost); t += 1 / 30) iceStep(list, 1 / 30, -1, false);
+  const target = plan ? plan.ty : TEE - 0.9;
+  return ghost.y < target - 0.15;
+}
+
+// ── MY TURN ─────────────────────────────────────────────────────────────────────────
+const myName = (() => { try { return localStorage.getItem("mpa-name") || ""; } catch { return ""; } })() ||
+  ["Swift", "Steady", "Frosty", "Lucky", "Smooth", "Chilly"][Math.floor(Math.random() * 6)] + " " + ["Slider", "Sweeper", "Skip", "Stone", "Glider", "Broom"][Math.floor(Math.random() * 6)];
+const me = { id: "", color: COLORS[0], a: 0, w: 0, c: 1, turnKey: "", thrownN: -1, thrownAt: 0, sent: "", lastSend: 0, throws: 0, shownFor: -1, holding: false, lastSweepSend: 0, sweeps: 0 };
+const nameOf = (id) => (id === me.id ? myName : String(S.entities.players?.[id]?.n || "Player"));
+const colorOf = (id) => (id === me.id ? me.color : S.entities.players?.[id]?.c || "#ccc");
+const seatName = (s) => (!s ? "" : s.bot ? s.n : s.id === me.id ? myName : String(S.entities.players?.[s.id]?.n || s.n));
+const seatColor = (s) => (!s ? "#ccc" : s.bot ? s.c : colorOf(s.id));
+const mySeat = (g) => g.seats.findIndex((s) => s.id === me.id);
+const myTurn = (g) => g.phase === "aim" && thrower(g) === mySeat(g) && mySeat(g) >= 0 && !(me.thrownN === g.n && performance.now() - me.thrownAt < 2500);
+/** My team's stone is sliding: I may sweep it. */
+const canSweep = (g) => g.phase === "slide" && mySeat(g) >= 0 && g.seats[mySeat(g)].t === throwTeam(g);
+const sweepHeld = () => me.holding || keys.has(" ");
+function myTick(g, now) {
+  const key = g.id + ":" + g.n;
+  if (myTurn(g) && me.turnKey !== key) { me.turnKey = key; me.a = 0; me.w = 0; drag = null; sfx("turn"); }
+  if (myTurn(g)) publishAim(g);
+  if (canSweep(g) && sweepHeld()) { // sweeping: tell the host about 5 times a second
+    if (now - me.lastSweepSend > 200) { me.lastSweepSend = now; if (!isHost()) net.send("sweep", { n: g.n }); me.sweeps++; }
+  }
+}
+/** Tell the others how I'm aiming (about 10 times a second while it changes). */
+function publishAim(g) {
+  const now = performance.now(), v = JSON.stringify({ n: g.n, a: r3(me.a), w: r3(me.w), c: me.c });
+  if (v === me.sent || now - me.lastSend < 100) return;
+  me.sent = v; me.lastSend = now; net.me.set("aim", v);
+}
+/** Pull (0..1) to weight: most of the pull is for guards and draws, the last part for hard takeouts. */
+const weightFor = (k) => (k < 0.7 ? CONFIG.minW + (k / 0.7) * (CONFIG.drawW - CONFIG.minW) : CONFIG.drawW + ((k - 0.7) / 0.3) * (CONFIG.maxW - CONFIG.drawW));
+/** What a weight does on a straight line: too light, a guard, a draw into the house, or a takeout. */
+function weightName(w) {
+  const d = (w * w) / (2 * CONFIG.friction);
+  return d < CONFIG.hogY ? "Too light" : d < TEE - CONFIG.houseR ? "Guard" : d < CONFIG.backY + 0.6 ? "Draw" : "Takeout";
+}
+function throwStone() {
+  const g = game();
+  if (!g || !myTurn(g) || me.w < CONFIG.minW) return;
+  const m = { g: g.id, n: g.n, a: r3(me.a), w: r3(me.w), c: me.c };
+  me.thrownN = g.n; me.thrownAt = performance.now(); me.throws++; publishAim(g); sfx("throw");
+  if (isHost()) hostThrow(me.id, m); else net.send("throw", m);
+}
+function setCurl(c) { me.c = c; $("curl").textContent = c > 0 ? "Curl ↻ right" : "Curl ↺ left"; }
+/** Two people in one color: the one with the higher sessionId picks a free color (bots' colors count as taken). */
+function fixColor() {
+  const others = Object.entries(S.entities.players || {}).filter(([id]) => id !== net.sessionId);
+  const g = game(), bots = g ? g.seats.filter((s) => s.bot).map((s) => s.c) : [];
+  if (!others.some(([id, p]) => p.c === me.color && id < net.sessionId) && !bots.includes(me.color)) return;
+  const taken = new Set([...others.map(([, p]) => p.c), ...bots]), free = COLORS.find((c) => !taken.has(c));
+  if (free) { me.color = free; net.me.set("c", free); }
+}
+
+// ── DRAW ────────────────────────────────────────────────────────────────────────────
+const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+let W = 0, H = 0, DPR = 1, tall = false, M = [1, 0, 0, -1], cx0 = 0, cy0 = 0, padTop = 0, padBottom = 0;
+const cam = { y: TEE - 1.5, z: 80, ty: TEE - 1.5 };
+function fit() {
+  DPR = Math.min(2, devicePixelRatio || 1); W = innerWidth; H = innerHeight; cv.width = W * DPR; cv.height = H * DPR;
+  tall = H > W; M = tall ? [1, 0, 0, -1] : [0, 1, 1, 0]; // tall screens: the sheet runs up the screen; wide ones: left to right
+  padTop = ATTRACT ? 0 : tall ? 104 : 96; padBottom = ATTRACT ? 0 : tall ? 70 : 64; // room for the scoreboard and the hint
+  cam.z = tall ? W / (2 * HW + 0.6) : (H - padTop - padBottom) / (2 * HW + 0.5);
+  cx0 = W / 2; cy0 = padTop + (H - padTop - padBottom) / 2;
+}
+addEventListener("resize", fit); addEventListener("orientationchange", fit); fit();
+/** How many metres of sheet the screen shows along its length. */
+const viewLen = () => (tall ? H - padTop - padBottom : W) / cam.z;
+const toScreen = (x, y) => { const ry = y - cam.y; return [cx0 + (M[0] * x + M[1] * ry) * cam.z, cy0 + (M[2] * x + M[3] * ry) * cam.z]; };
+const toWorld = (sx, sy) => { const u = (sx - cx0) / cam.z, v = (sy - cy0) / cam.z; return [M[0] * u + M[2] * v, M[1] * u + M[3] * v + cam.y]; }; // the same transform the frame is drawn with
+/** The camera: on the house while aiming and scoring; riding just ahead of a sliding stone. */
+function moveCamera(g, view, dt) {
+  const half = viewLen() / 2, houseY = Math.min(TEE + 1.4 - half + CONFIG.houseR + 0.4, TEE - 0.4);
+  const thrown = view.find((s) => s.i === g.n && moving(s));
+  let ty = houseY;
+  if (g.phase === "slide" && thrown) ty = clamp(thrown.y + half * 0.45, -1 + half, houseY);
+  if (g.phase === "slide" && thrown && thrown.y < 8 && Math.abs(ty - cam.y) > half) { cam.y = ty; return; } // a new throw: cut to the hack
+  cam.y += (ty - cam.y) * (1 - Math.exp(-dt * (g.phase === "slide" ? 6 : 2.5)));
+}
+// The ice, painted once into a tall canvas (pebble, lines, house) and blitted every frame.
+const PX = 60, ICE_LEN = CONFIG.endY + 4; // pixels per metre in the painted sheet; it runs from y = -4 to the boards
+const iceImg = (() => {
+  const c = document.createElement("canvas"); c.width = Math.round(2 * HW * PX); c.height = Math.round(ICE_LEN * PX);
+  const g = c.getContext("2d"), X = (x) => (x + HW) * PX, Y = (y) => (CONFIG.endY - y) * PX;
+  const grad = g.createLinearGradient(0, 0, c.width, 0); grad.addColorStop(0, "#d9e8f3"); grad.addColorStop(0.5, "#f4f9fd"); grad.addColorStop(1, "#d9e8f3");
+  g.fillStyle = grad; g.fillRect(0, 0, c.width, c.height);
+  let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let k = 0; k < 7000; k++) { g.fillStyle = k % 3 ? "#ffffffa0" : "#b8cfe070"; g.fillRect(rnd() * c.width, rnd() * c.height, 2, 2); } // the pebble
+  const ring = (r, color) => { g.fillStyle = color; g.beginPath(); g.arc(X(0), Y(TEE), r * PX, 0, 7); g.fill(); };
+  ring(CONFIG.houseR + 0.02, "#1d4fa8"); ring(CONFIG.houseR, "#2f6fd6"); ring(1.24, "#c9d9e8"); ring(1.22, "#f4f9fd"); ring(0.63, "#a82424"); ring(0.61, "#e03a3a"); ring(0.15, "#f4f9fd");
+  const line = (y, w, color) => { g.fillStyle = color; g.fillRect(0, Y(y) - (w * PX) / 2, c.width, w * PX); };
+  line(CONFIG.hogY, 0.1, "#d8343c"); line(0.6, 0.1, "#d8343c"); line(TEE, 0.02, "#22324a"); line(CONFIG.backY, 0.02, "#22324a");
+  g.fillStyle = "#22324a"; g.fillRect(X(0) - 1, Y(CONFIG.endY), 2, (CONFIG.endY - 0.6) * PX); // the centre line
+  g.fillStyle = "#1c2733"; g.fillRect(X(-0.08), Y(-1.6), 0.16 * PX, 0.4 * PX); // the hack
+  g.globalAlpha = 0.18; g.fillStyle = "#2f6fd6"; g.font = `900 ${0.55 * PX}px system-ui, sans-serif`; g.textAlign = "center"; g.fillText("STONE SLIDE", X(0), Y(11)); g.globalAlpha = 1;
+  return c;
+})();
+const fx = { parts: [], rings: [], lastHit: 0 };
+const trails = new Map(); // stone id -> its recent positions while it slides
+function updateTrails(view) {
+  for (const s of view) {
+    let tr = trails.get(s.i);
+    if (moving(s)) { if (!tr) trails.set(s.i, (tr = [])); const l = tr[tr.length - 1]; if (!l || Math.hypot(l[0] - s.x, l[1] - s.y) > 0.25) tr.push([s.x, s.y]); if (tr.length > 40) tr.shift(); }
+    else if (tr) { tr.shift(); if (!tr.length) trails.delete(s.i); }
+  }
+  for (const id of trails.keys()) if (!view.some((s) => s.i === id)) trails.delete(id);
+}
+function hitFx(x, y, power) {
+  const now = performance.now(); if (now - fx.lastHit < 80) return; fx.lastHit = now;
+  for (let k = 0; k < 14; k++) { const a = Math.random() * 6.283, s = 0.6 + Math.random() * 1.6 * Math.min(2, power); fx.parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 0.5, color: "#ffffff" }); }
+  sfx("clack", Math.min(1, power / 4));
+}
+/** One stone: shadow, granite, the handle in its team's color. */
+function drawStone(s, alpha = 1, glowColor = "") {
+  ctx.globalAlpha = alpha;
+  if (glowColor) { ctx.fillStyle = glowColor; ctx.beginPath(); ctx.arc(s.x, s.y, SR * 1.7, 0, 7); ctx.fill(); }
+  ctx.fillStyle = "#00000033"; ctx.beginPath(); ctx.arc(s.x + 0.02, s.y - 0.03, SR, 0, 7); ctx.fill();
+  const g = ctx.createRadialGradient(s.x - SR * 0.3, s.y + SR * 0.3, SR * 0.1, s.x, s.y, SR); g.addColorStop(0, "#9aa3ad"); g.addColorStop(1, "#4d5661");
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(s.x, s.y, SR, 0, 7); ctx.fill();
+  const team = TEAMS[s.t] || TEAMS[0];
+  ctx.fillStyle = team.c; ctx.beginPath(); ctx.arc(s.x, s.y, SR * 0.62, 0, 7); ctx.fill();
+  ctx.strokeStyle = team.dark; ctx.lineWidth = SR * 0.16; ctx.stroke();
+  const ang = (s.spin || 0) + (s.c || 1) * 0.3; // the handle turns with the stone
+  ctx.strokeStyle = "#ffffffcc"; ctx.lineWidth = SR * 0.2; ctx.beginPath(); ctx.moveTo(s.x - Math.cos(ang) * SR * 0.45, s.y - Math.sin(ang) * SR * 0.45); ctx.lineTo(s.x + Math.cos(ang) * SR * 0.45, s.y + Math.sin(ang) * SR * 0.45); ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+/** A sweeper (seen from above, in the player's color) scrubbing the ice just in front of the stone. */
+function drawBroom(s, side, color, t) {
+  const v = Math.hypot(s.vx, s.vy) || 1, ux = s.vx / v, uy = s.vy / v, px = uy * side, py = -ux * side; // p points to this sweeper's side
+  const wob = Math.sin(t * 20 + side * 1.7) * 0.18, ahead = 0.55 + (side > 0 ? 0 : 0.35);
+  const hx = s.x + ux * ahead + px * wob, hy = s.y + uy * ahead + py * wob;        // the broom head
+  const bx = s.x + ux * (ahead - 0.15) + px * 0.75, by = s.y + uy * (ahead - 0.15) + py * 0.75; // the sweeper
+  ctx.strokeStyle = "#5a3b22"; ctx.lineWidth = 0.05; ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(hx, hy); ctx.stroke(); // the handle
+  ctx.save(); ctx.translate(hx, hy); ctx.rotate(Math.atan2(py, px));
+  ctx.fillStyle = "#222c38"; ctx.fillRect(-0.06, -0.24, 0.12, 0.48); ctx.fillStyle = color; ctx.fillRect(-0.03, -0.22, 0.06, 0.44);
+  ctx.restore();
+  ctx.fillStyle = "#00000030"; ctx.beginPath(); ctx.ellipse(bx + 0.04, by - 0.05, 0.3, 0.22, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = color; ctx.beginPath(); ctx.ellipse(bx, by, 0.2, 0.28, Math.atan2(uy, ux), 0, 7); ctx.fill(); // shoulders
+  ctx.fillStyle = "#f1c9a5"; ctx.beginPath(); ctx.arc(bx, by, 0.11, 0, 7); ctx.fill(); ctx.fillStyle = "#3b2a1e"; ctx.beginPath(); ctx.arc(bx - ux * 0.03, by - uy * 0.03, 0.09, 0, 7); ctx.fill(); // head
+  if (Math.random() < 0.6) fx.parts.push({ x: hx, y: hy, vx: (Math.random() - 0.5) * 1.2 + ux * 0.5, vy: (Math.random() - 0.5) * 1.2 + uy * 0.5, life: 0.4, color: "#ffffff" });
+}
+function draw(g, view, sweep, dt, now) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = "#0f1c2e"; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.setTransform(DPR * cam.z * M[0], DPR * cam.z * M[2], DPR * cam.z * M[1], DPR * cam.z * M[3], DPR * cx0, DPR * cy0);
+  ctx.translate(0, -cam.y); // from here on: metres on the sheet
+  ctx.fillStyle = "#33465e"; ctx.fillRect(-HW - 0.25, -4, 2 * HW + 0.5, CONFIG.endY + 4.25); // the boards
+  ctx.save(); ctx.translate(-HW, CONFIG.endY); ctx.scale(1 / PX, -1 / PX); ctx.drawImage(iceImg, 0, 0); ctx.restore();
+  const res = g.phase === "end" && g.res ? g.res : null;
+  // the aim line and where the stone would stop if it ran straight (curl and sweeping change that)
+  const av = aimView(g, dt);
+  if (av) {
+    const d = (av.w * av.w) / (2 * CONFIG.friction), ex = Math.sin(av.a) * d, ey = Math.cos(av.a) * d;
+    ctx.strokeStyle = av.mine ? "#1c2733aa" : "#1c273355"; ctx.lineWidth = 0.04; ctx.setLineDash([0.25, 0.2]);
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(ex, ey); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = av.color; ctx.lineWidth = 0.05; ctx.beginPath(); ctx.arc(ex, ey, SR, 0, 7); ctx.stroke();
+    ctx.beginPath(); ctx.arc(ex + av.c * 0.25, ey - 0.35, 0.3, av.c > 0 ? Math.PI * 0.75 : Math.PI * 0.25, av.c > 0 ? Math.PI * 0.25 : Math.PI * 0.75, av.c < 0); ctx.stroke(); // which way it curls
+    if (av.mine || av.w > 0) drawStone({ x: 0, y: 0, t: throwTeam(g), c: av.c }, 0.9);
+  }
+  for (const [id, tr] of trails) { // faint tracks behind the stones that are sliding
+    if (tr.length < 2) continue;
+    ctx.strokeStyle = "#7aa6c855"; ctx.lineWidth = SR * 0.9; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(tr[0][0], tr[0][1]);
+    for (const [x, y] of tr) ctx.lineTo(x, y);
+    ctx.stroke(); ctx.lineCap = "butt";
+  }
+  for (const s of view) {
+    const glow = res && res.ids.includes(s.i) ? (Math.sin(now / 150) > 0 ? "#ffffffaa" : "#ffd84d99") : "";
+    drawStone(s, s.out ? 0.35 : 1, glow);
+  }
+  const thrown = view.find((s) => s.i === g.n && moving(s));
+  if (thrown && sweep && sweep.n === g.n) sweep.who.forEach((k, j) => drawBroom(thrown, j % 2 ? -1 : 1, seatColor(g.seats[k]), now / 1000 + j));
+  for (let i = fx.parts.length - 1; i >= 0; i--) { const p = fx.parts[i]; p.life -= dt; if (p.life <= 0) { fx.parts.splice(i, 1); continue; } p.x += p.vx * dt; p.y += p.vy * dt; ctx.globalAlpha = p.life * 2; ctx.fillStyle = p.color; ctx.fillRect(p.x - 0.025, p.y - 0.025, 0.05, 0.05); }
+  ctx.globalAlpha = 1;
+}
+/** The thrower's line as everyone sees it: mine live, a remote player's from its `aim`, a bot's from `bot`. */
+const shownAim = { n: -1, a: 0, w: 0, c: 1 };
+function aimView(g, dt) {
+  if (g.phase !== "aim") return null;
+  const k = thrower(g), seat = g.seats[k];
+  if (!seat) return null;
+  if (seat.id === me.id && myTurn(g)) return { a: me.a, w: me.w, c: me.c, mine: true, color: me.color };
+  const src = seat.bot || g.turnAt + CONFIG.turnMs < Date.now() ? parse(S.shared.bot, null) : parseOnce("aim:" + seat.id, S.entities.players[seat.id]?.aim, null);
+  if (shownAim.n !== g.n) Object.assign(shownAim, { n: g.n, a: 0, w: 0, c: 1 });
+  if (src && src.n === g.n) { const e = 1 - Math.exp(-dt * 10); shownAim.a += (src.a - shownAim.a) * e; shownAim.w += (src.w - shownAim.w) * e; shownAim.c = src.c; }
+  return shownAim.w > 0 ? { ...shownAim, mine: false, color: seatColor(seat) } : null;
+}
+// Sound: tiny WebAudio sounds, started by the first touch or click.
+let audio = null, sweepNoise = null;
+function sfx(kind, power = 1) {
+  if (!audio || ATTRACT) return;
+  const [type, f0, f1, len, vol] = { clack: ["triangle", 900, 300, 0.12, 0.1 + power * 0.3], throw: ["sine", 120, 70, 0.4, 0.2], turn: ["triangle", 520, 880, 0.16, 0.06], score: ["square", 440, 880, 0.35, 0.08], win: ["sawtooth", 330, 990, 0.6, 0.12] }[kind];
+  const t = audio.currentTime, o = audio.createOscillator(), g = audio.createGain();
+  o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + len);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+  o.connect(g).connect(audio.destination); o.start(t); o.stop(t + len + 0.02);
+}
+/** The scrub of brooms on ice: filtered noise, on while anyone sweeps. */
+function setSweepSound(on) {
+  if (!audio || ATTRACT) return;
+  if (!sweepNoise) {
+    const buf = audio.createBuffer(1, audio.sampleRate, audio.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const src = audio.createBufferSource(), f = audio.createBiquadFilter(), g = audio.createGain();
+    src.buffer = buf; src.loop = true; f.type = "bandpass"; f.frequency.value = 2400; g.gain.value = 0;
+    src.connect(f).connect(g).connect(audio.destination); src.start(); sweepNoise = g;
+  }
+  sweepNoise.gain.setTargetAtTime(on ? 0.12 : 0, audio.currentTime, 0.05);
+}
+
+// ── HUD & RESULTS ───────────────────────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+let board = null, msgTimer = 0, resSeen = null, dropped = false, scoreKey = "";
+function toast(html, ms = 2200) { const m = $("msg"); m.innerHTML = html; m.classList.add("on"); clearTimeout(msgTimer); msgTimer = setTimeout(() => m.classList.remove("on"), ms); }
+const teamNames = (g, t) => teamSeats(g, t).map((i) => (g.seats[i].id === me.id ? "You" : seatName(g.seats[i])));
+/** Stones a team still has to throw this end. */
+const stonesLeft = (g, t) => { let n = 0; for (let k = g.thr + (g.phase === "slide" ? 1 : 0); k < 2 * CONFIG.stonesPerTeam; k++) if ((k % 2 === 0 ? g.first : 1 - g.first) === t) n++; return g.phase === "aim" || g.phase === "slide" ? n : 0; };
+function scoreHtml(g) {
+  const cur = g.phase === "aim" || g.phase === "slide" ? throwTeam(g) : -1;
+  return [0, 1].map((t) => {
+    const ends = Array.from({ length: CONFIG.ends }, (_, k) => `<td class="end ${k === g.end - 1 && g.phase !== "over" ? "now" : ""}">${g.ends[k] ? g.ends[k][t] : ""}</td>`).join("");
+    const left = "●".repeat(stonesLeft(g, t)) + "○".repeat(CONFIG.stonesPerTeam - stonesLeft(g, t));
+    return `<tr class="${t === cur ? "now" : ""}"><td class="nm"><i style="background:${TEAMS[t].c}"></i>${esc(teamNames(g, t).join(", "))}</td><td class="st" style="color:${TEAMS[t].c}">${left}</td>${ends}<td class="tot">${g.score[t]}</td></tr>`;
+  }).join("");
+}
+function hud(g, now) {
+  const resKey = g.res ? g.id + ":" + g.res.end : resSeen ?? "";
+  if (resKey !== resSeen && resSeen !== null && g.res && !ATTRACT) { toast(g.res.pts ? `${TEAMS[g.res.team].name} +${g.res.pts}<small>End ${g.res.end}</small>` : `Blank end<small>No stone in the house</small>`, 3000); sfx("score"); }
+  resSeen = resKey;
+  const sweepState = parseOnce("sweep", S.shared.sweep, null), sweepingNow = !!(sweepState && sweepState.n === g.n && sweepState.who.length && g.phase === "slide");
+  setSweepSound(sweepingNow);
+  if (ATTRACT) { for (const id of ["score", "turn", "hint", "net", "sweep"]) $(id).textContent = ""; $("over").hidden = true; return; }
+  const key = [g.v, me.color, JSON.stringify(g.seats.map((s) => seatName(s)))].join("|");
+  if (key !== scoreKey) { scoreKey = key; $("score").innerHTML = scoreHtml(g); }
+  const k = thrower(g), seat = g.seats[k], mine = myTurn(g), left = Math.ceil((g.turnAt + CONFIG.turnMs - Date.now()) / 1000), i = mySeat(g);
+  const lastStone = g.thr === 2 * CONFIG.stonesPerTeam - 1 ? " · last stone" : "";
+  $("turn").className = "hud" + (mine ? " mine" : "");
+  $("turn").innerHTML = g.phase === "aim" ? `${mine ? (me.w ? `${weightName(me.w)} · curl ${me.c > 0 ? "right" : "left"}` : "Your throw") : `${esc(seatName(seat))} is throwing`}<small>End ${g.end} of ${CONFIG.ends} · ${TEAMS[throwTeam(g)].name} stone ${Math.floor(g.thr / 2) + 1} of ${CONFIG.stonesPerTeam}${lastStone}${mine && left <= 10 ? ` · throwing for you in ${Math.max(0, left)}s` : ""}</small>` :
+    g.phase === "slide" ? `${TEAMS[throwTeam(g)].name} stone sliding<small>End ${g.end} of ${CONFIG.ends}</small>` : g.phase === "end" ? `End ${g.end} done` : "";
+  const sweepMine = canSweep(g) && view.some((s) => s.i === g.n && moving(s));
+  $("sweep").textContent = sweepMine ? (sweepHeld() ? "SWEEPING!" : "HOLD TO SWEEP") : "";
+  $("sweep").className = "hud" + (sweepMine && sweepHeld() ? " on" : "");
+  const touch = matchMedia("(pointer: coarse)").matches;
+  $("hint").textContent = i < 0 && g.phase !== "over" ? "You're watching. You get a seat when a bot's seat is free, or next match." :
+    mine && me.throws < 2 ? (touch ? "Drag back to aim and set the weight, let go to throw. Then hold to sweep." : "Drag back to aim and set the weight, let go to throw · then hold Space or the mouse to sweep") :
+    sweepMine && me.sweeps < 4 ? "Sweeping makes the stone go further and curl less." : "";
+  $("curl").hidden = !mine;
+  const n = livePlayers().length;
+  $("net").textContent = net.offline ? "Offline: playing with bots" : dropped ? "Reconnecting…" : `Online · ${n} player${n === 1 ? "" : "s"}${isHost() ? " · you run the ice" : ""}`;
+  $("over").hidden = g.phase !== "over";
+  if (g.phase === "over") {
+    const myTeam = i >= 0 ? g.seats[i].t : -1;
+    $("overTitle").textContent = g.win < 0 ? "It's a tie!" : g.win === myTeam ? "You win!" : `${TEAMS[g.win].name} wins!`;
+    $("overSub").textContent = `${TEAMS[0].name} ${g.score[0]} – ${g.score[1]} ${TEAMS[1].name}` + (g.win >= 0 ? ` · ${teamNames(g, g.win).join(", ")}` : "");
+    $("next").textContent = `New match in ${Math.max(0, Math.ceil((g.endsAt - Date.now()) / 1000))}s`;
+    if (me.shownFor !== g.id) { me.shownFor = g.id; showBoard(g.win >= 0 && g.win === myTeam); sfx("win"); }
+  }
+}
+function showBoard(won) {
+  const list = $("board");
+  if (!board) { list.innerHTML = "<li>Leaderboards need a connection.</li>"; return; }
+  list.innerHTML = "<li>Loading…</li>";
+  (won ? board.submit(1, "inc").catch(() => null) : Promise.resolve()).then(() => board.top(10)).then(({ entries }) => {
+    list.innerHTML = entries.length ? entries.map((e) => `<li>${esc(e.username || "Player")}<span>${e.score}</span></li>`).join("") : "<li>No wins yet. Be the first.</li>";
+  }).catch(() => { list.innerHTML = "<li>Couldn't load the leaderboard.</li>"; });
+}
+$("again").onclick = () => { if (isHost()) host.again = true; else net.send("again", {}); };
+
+// ── INPUT ───────────────────────────────────────────────────────────────────────────
+// On your throw: press anywhere and drag BACK (toward yourself); the line points where the
+// stone goes, the further you pull the harder it slides. Let go to throw. While your team's
+// stone slides: hold anywhere (or Space) to sweep.
+const keys = new Set();
+let drag = null;
+cv.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  try { audio ||= new AudioContext(); } catch {}
+  me.holding = true;
+  const g = game();
+  if (!g || !myTurn(g) || drag) return;
+  cv.setPointerCapture(e.pointerId);
+  drag = { id: e.pointerId, sx: e.clientX, sy: e.clientY };
+});
+cv.addEventListener("pointermove", (e) => {
+  if (!drag || drag.id !== e.pointerId) return;
+  const g = game(); if (!g || !myTurn(g)) { drag = null; return; }
+  const dx = drag.sx - e.clientX, dy = drag.sy - e.clientY, len = Math.hypot(dx, dy);
+  if (len < 12) { me.w = 0; return; }
+  const wx = M[0] * dx + M[2] * dy, wy = M[1] * dx + M[3] * dy; // the pull, turned into a direction on the sheet
+  me.a = clamp(Math.atan2(wx, Math.max(0.01, wy)) * CONFIG.aimScale, -CONFIG.aimMax, CONFIG.aimMax);
+  me.w = wy <= 0 ? 0 : weightFor(clamp((len - 12) / CONFIG.maxPull, 0, 1));
+});
+for (const ev of ["pointerup", "pointercancel"]) cv.addEventListener(ev, (e) => {
+  me.holding = false;
+  if (!drag || drag.id !== e.pointerId) return;
+  drag = null;
+  if (ev === "pointerup" && me.w >= CONFIG.minW) throwStone(); else me.w = 0;
+});
+addEventListener("keydown", (e) => {
+  const k = e.key, g = game();
+  try { audio ||= new AudioContext(); } catch {}
+  if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", " "].includes(k)) e.preventDefault();
+  keys.add(k);
+  if (!g || !myTurn(g)) return;
+  if (k === "ArrowLeft") me.a = clamp(me.a - 0.002, -CONFIG.aimMax, CONFIG.aimMax);
+  if (k === "ArrowRight") me.a = clamp(me.a + 0.002, -CONFIG.aimMax, CONFIG.aimMax);
+  if (k === "ArrowUp") me.w = clamp((me.w || CONFIG.minW) + 0.1, CONFIG.minW, CONFIG.maxW);
+  if (k === "ArrowDown") me.w = clamp((me.w || CONFIG.minW) - 0.1, CONFIG.minW, CONFIG.maxW);
+  if (k === "c" || k === "C") setCurl(-me.c);
+  if (k === "Enter") { if (!me.w) me.w = 8; throwStone(); }
+});
+addEventListener("keyup", (e) => keys.delete(e.key));
+addEventListener("blur", () => { keys.clear(); me.holding = false; });
+$("curl").addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); setCurl(-me.c); });
+document.addEventListener("touchmove", (e) => e.preventDefault(), { passive: false });
+
+// ── MAIN LOOP ───────────────────────────────────────────────────────────────────────
+// Everyone but the host runs the stones from each `stones` write, easing out the jump.
+let view = [], viewRaw = null;
+const ease = new Map(); // stone id -> {dx, dy}: how far the drawn stone is from the simulated one
+function syncView(g, dt) {
+  if (host.acting) { view = host.ice; return; }
+  if (S.shared.stones !== viewRaw) {
+    viewRaw = S.shared.stones;
+    const fresh = (parse(viewRaw, []) || []).map((s) => ({ ...s })), old = new Map(view.map((s) => [s.i, s]));
+    for (const s of fresh) { const o = old.get(s.i); if (o) { const e = ease.get(s.i) || { dx: 0, dy: 0 }; e.dx += o.x - s.x; e.dy += o.y - s.y; if (Math.hypot(e.dx, e.dy) > 1) { e.dx = 0; e.dy = 0; } ease.set(s.i, e); s.spin = o.spin; } }
+    view = fresh;
+  }
+  if (g.phase === "slide") { const sw = parseOnce("sweep", S.shared.sweep, null); iceStep(view, dt * CONFIG.simSpeed, g.n, !!(sw && sw.n === g.n && sw.who.length)); }
+}
+/** The stones as drawn: the host's own simulation, or everyone else's eased toward the latest write. */
+function shownStones(view, dt) {
+  if (host.acting) return view;
+  return view.map((s) => { const e = ease.get(s.i); if (!e) return s; e.dx *= Math.exp(-dt * 8); e.dy *= Math.exp(-dt * 8); return { ...s, x: s.x + e.dx, y: s.y + e.dy }; });
+}
+let last = performance.now(), lastHb = 0, lastHud = 0, gameId = -1;
+function frame(now) {
+  requestAnimationFrame(frame);
+  const t0 = performance.now(); // not `now`: the first frame after a freeze can be stamped from before it ended
+  if (frameAt && t0 - frameAt > 1000) { wokeAt = t0; host.acting = false; host.last = null; host.bot = null; } // woke from a stall: drop my host copy, adopt state again (see isHost)
+  frameAt = t0;
+  const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now; // the first frame can be stamped before `last`
+  if (now - lastHb > 1000) { lastHb = now; net.me.set("hb", Date.now()); fixColor(); }
+  if (isHost()) hostTick(dt, now); else host.acting = false;
+  const g = game();
+  if (!g) return;
+  if (g.id !== gameId) { gameId = g.id; drag = null; me.turnKey = ""; view = []; viewRaw = null; }
+  syncView(g, dt);
+  for (const s of view) if (moving(s)) s.spin = (s.spin || 0) + (s.c || 1) * dt * 1.5;
+  myTick(g, now);
+  moveCamera(g, view, dt);
+  updateTrails(shownStones(view, dt));
+  draw(g, shownStones(view, 0), parseOnce("sweep", S.shared.sweep, null), dt, now);
+  if (now - lastHud > 120) { lastHud = now; hud(g, now); }
+}
+
+(async function start() {
+  net = await connect();
+  net.onState((st) => { S = st; });
+  net.on("throw", (m, from) => { if (host.acting && m) hostThrow(from, m); });
+  net.on("sweep", (m, from) => { const g = game(); if (host.acting && m && g && +m.n === g.n) host.sweepAt.set(from, performance.now()); });
+  net.on("again", () => { if (host.acting) host.again = true; });
+  net.onDisconnect(() => { dropped = true; $("net").textContent = "Reconnecting…"; });
+  net.onReconnect(() => { dropped = false; });
+  if (!net.offline && typeof MP !== "undefined") board = MP.auth({ key: MP_CONNECT.key, apiUrl: MP_CONNECT.apiUrl }).leaderboard(CONFIG.board);
+  me.id = net.sessionId;
+  const g0 = parse(S.shared.game, null), taken = new Set([...Object.entries(S.entities.players || {}).filter(([id]) => id !== net.sessionId).map(([, p]) => p.c), ...(g0 ? g0.seats.filter((s) => s.bot).map((s) => s.c) : [])]);
+  me.color = COLORS.find((c) => !taken.has(c)) || COLORS[Math.floor(Math.random() * COLORS.length)];
+  net.me.set({ n: myName, c: me.color, hb: Date.now() });
+  if (ATTRACT) { Object.assign(CONFIG, { botThinkMs: 700, endMs: 1500, resultsMs: 2000, simSpeed: 1.7, botLight: 0.07 }); fit(); }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+{
+  "name": "Stone Slide",
+  "genre": "sports",
+  "dim": "2D",
+  "mode": "Versus",
+  "players": "2–8",
+  "hook": "Slide it, then sweep like mad. Closest to the button scores.",
+  "how": "Two teams take turns sliding stones down the ice at the target. Drag back to aim and set the weight, let go, then hold to sweep: it glides further and curls less. Four stones a team each end, three ends; your stones nearest the button score.",
+  "controls": "Drag back and let go to throw, hold to sweep (mouse or finger); or arrow keys, Enter to throw, Space to sweep, C to change the curl",
+  "uses": [
+    ["Leaderboard", "Most match wins, shown on the results card."],
+    ["Host-run physics", "The host's browser slides every stone and counts each end; if it leaves, the next player takes over mid-slide."],
+    ["Bots", "Bots throw and sweep on both teams until friends join."],
+    ["Live sync", "Everyone sees each stone slide, the brooms sweep and the hits, all at once."]
+  ],
+  "ideas": [
+    "Add a power-up stone that knocks everything out of the house",
+    "Make it an outdoor pond at night with snow falling",
+    "Add a fourth end and a bigger house"
+  ]
+}
