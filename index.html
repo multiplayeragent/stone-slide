@@ -734,7 +734,10 @@ addEventListener("keydown", (e) => {
   if (k === "Enter") { if (!me.w) me.w = 8; throwStone(); }
 });
 addEventListener("keyup", (e) => keys.delete(e.key));
-addEventListener("blur", () => { keys.clear(); me.holding = false; });
+/** A pull that ends without a pointerup (the tab lost focus, the browser took the pointer): drop it, no throw. */
+function dropDrag() { if (drag) { drag = null; me.w = 0; } }
+cv.addEventListener("lostpointercapture", (e) => { if (drag && drag.id === e.pointerId) dropDrag(); });
+addEventListener("blur", () => { keys.clear(); me.holding = false; dropDrag(); });
 for (const ev of ["pointerup", "pointercancel"]) addEventListener(ev, () => { me.holding = false; }); // let go anywhere (off the ice too): stop sweeping
 cv.addEventListener("contextmenu", (e) => e.preventDefault()); // a right-click doesn't open the browser menu over the ice
 $("curl").addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); setCurl(-me.c); });
